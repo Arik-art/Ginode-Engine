@@ -23,22 +23,27 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Unzip
+      - name: Unzip and Build
         run: |
           rm -rf app_src
           mkdir -p app_src
           unzip -o engine.zip -d app_src
           find app_src -exec touch {} +
-
-      - name: Build
-        working-directory: app_src
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
+          PROJ_DIR=$(dirname "$(find app_src -name 'build.gradle*' | head -n 1)")
+          echo "Building in: $PROJ_DIR"
+          cd "$PROJ_DIR"
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew assembleRelease
+          else
+            gradle assembleRelease
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/out_apk"
+          find . -name "*.apk" -exec cp {} "$GITHUB_WORKSPACE/out_apk/" \;
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Ginode Engine v1.0.${{ github.run_number }}
-          files: app_src/build/outputs/apk/release/*.apk
+          files: out_apk/*.apk
