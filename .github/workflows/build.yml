@@ -1,37 +1,47 @@
 name: Build APK
-​on:
-push:
-branches: [ main, master, главный ]
-workflow_dispatch:
-​permissions:
-contents: write
-​jobs:
-build:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout repository
-uses: actions/checkout@v4
-​- name: Set up JDK 17
-uses: actions/setup-java@v4
-with:
-java-version: '17'
-distribution: 'temurin'
-​- name: Setup Android SDK
-uses: android-actions/setup-android@v3
-​- name: Unzip and fix timestamps
-run: |
-rm -rf app_src
-mkdir -p app_src
-unzip -o engine.zip -d app_src
-find app_src -exec touch {} +
-​- name: Build APK
-working-directory: app_src
-run: |
-chmod +x gradlew
-./gradlew assembleRelease
-​- name: Publish Release
-uses: softprops/action-gh-release@v2
-with:
-tag_name: v1.0.{{ github.run_number }}
-name: Ginode Engine v1.0.{{ github.run_number }}
-files: app_src/build/outputs/apk/release/*.apk
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Unzip
+        run: |
+          rm -rf app_src
+          mkdir -p app_src
+          unzip -o engine.zip -d app_src
+          find app_src -exec touch {} +
+
+      - name: Build
+        working-directory: app_src
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Ginode Engine v1.0.${{ github.run_number }}
+          files: app_src/build/outputs/apk/release/*.apk
