@@ -1,49 +1,39 @@
 name: Build APK
-
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Unzip and Build
+      - uses: actions/checkout@v4
+      - name: Unpack engine.zip and add your scenes
         run: |
-          rm -rf app_src
-          mkdir -p app_src
-          unzip -o engine.zip -d app_src
-          find app_src -exec touch {} +
-          PROJ_DIR=$(dirname "$(find app_src -name 'build.gradle*' | head -n 1)")
-          echo "Building in: $PROJ_DIR"
-          cd "$PROJ_DIR"
-          if [ -f "./gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleRelease
-          else
-            gradle assembleRelease
-          fi
-          mkdir -p "$GITHUB_WORKSPACE/out_apk"
-          find . -name "*.apk" -exec cp {} "$GITHUB_WORKSPACE/out_apk/" \;
-
-      - name: Release
-        uses: softprops/action-gh-release@v2
+          test -f engine.zip || { echo "engine.zip not found"; exit 1; }
+          rm -rf app_src && mkdir app_src && unzip -o engine.zip -d app_src
+          mkdir -p app_src/src/main/assets
+          cp -v *.gino app_src/src/main/assets/ 2>/dev/null || true
+      - uses: actions/setup-java@v4
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Ginode Engine v1.0.${{ github.run_number }}
-          files: out_apk/*.apk
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+      - name: Android SDK pieces
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "ndk;26.1.10909125" "cmake;3.22.1" "platforms;android-34" "build-tools;34.0.0"
+      - name: Build
+        working-directory: app_src
+        run: gradle assembleRelease --no-daemon
+      - name: Publish APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "build-${{ github.run_number }}" app_src/build/outputs/apk/release/*.apk \
+            --title "Build ${{ github.run_number }}" --notes "Ginode build ${{ github.run_number }}"
